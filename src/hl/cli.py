@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 import subprocess
 import tempfile
 from pathlib import Path
@@ -28,15 +29,35 @@ def _get_or_exit(entry_id: int) -> api.Entry:
     return entry
 
 
+GUI_EDITORS_WAIT_FLAG = {
+    "subl": "-w",
+    "code": "--wait",
+    "mate": "-w",
+    "atom": "--wait",
+    "zed": "--wait",
+}
+
+
+def _editor_cmd() -> list[str]:
+    """Build editor command, adding --wait for GUI editors."""
+    editor = os.environ.get("EDITOR", os.environ.get("VISUAL", "nano"))
+    parts = shlex.split(editor)
+    basename = Path(parts[0]).stem
+    wait_flag = GUI_EDITORS_WAIT_FLAG.get(basename)
+    if wait_flag and wait_flag not in parts:
+        parts.append(wait_flag)
+    return parts
+
+
 def _open_editor(initial: str = "") -> str | None:
     """Open $EDITOR, return content or None if empty."""
-    editor = os.environ.get("EDITOR", os.environ.get("VISUAL", "vi"))
+    cmd = _editor_cmd()
     with tempfile.NamedTemporaryFile(suffix=".md", mode="w", delete=False) as f:
         f.write(initial)
         tmp_path = f.name
 
     try:
-        subprocess.run([editor, tmp_path], check=True)
+        subprocess.run([*cmd, tmp_path], check=True)
         content = Path(tmp_path).read_text().strip()
         return content if content else None
     finally:
