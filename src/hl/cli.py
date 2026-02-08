@@ -5,7 +5,10 @@ from __future__ import annotations
 import os
 import shlex
 import subprocess
+import sys
 import tempfile
+import termios
+import tty
 from pathlib import Path
 
 import typer
@@ -49,6 +52,59 @@ def _editor_cmd() -> list[str]:
     return parts
 
 
+def _pick(items: list[str], visible: int = 5) -> int | None:
+    """Arrow/j/k picker. Returns selected index or None on q/Esc."""
+    if not items:
+        return None
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    n = len(items)
+    cur = 0
+    top = 0
+    vis = min(visible, n)
+
+    def render(first: bool = False) -> None:
+        nonlocal top
+        if cur < top:
+            top = cur
+        elif cur >= top + vis:
+            top = cur - vis + 1
+        if not first:
+            sys.stdout.write(f"\033[{vis}A")
+        for i in range(top, top + vis):
+            marker = ">" if i == cur else " "
+            sys.stdout.write(f"\r\033[K {marker} {items[i]}\n")
+        sys.stdout.flush()
+
+    def readkey() -> str:
+        b = os.read(fd, 1)
+        if b == b"\x1b":
+            b2 = os.read(fd, 1)
+            if b2 == b"[":
+                b3 = os.read(fd, 1)
+                return {"A": "up", "B": "down"}.get(b3.decode(), "")
+            return "esc"
+        return {"\r": "enter", "\x03": "ctrl-c"}.get(b.decode("utf-8", "ignore"), b.decode("utf-8", "ignore"))
+
+    tty.setraw(fd)
+    try:
+        render(first=True)
+        while True:
+            key = readkey()
+            if key in ("k", "up") and cur > 0:
+                cur -= 1
+                render()
+            elif key in ("j", "down") and cur < n - 1:
+                cur += 1
+                render()
+            elif key == "enter":
+                return cur
+            elif key in ("q", "esc", "ctrl-c"):
+                return None
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+
 def _open_editor(initial: str = "") -> str | None:
     """Open $EDITOR, return content or None if empty."""
     cmd = _editor_cmd()
@@ -57,7 +113,7 @@ def _open_editor(initial: str = "") -> str | None:
         tmp_path = f.name
 
     try:
-        subprocess.run([*cmd, tmp_path], check=True)
+        subprocess.run([*cmd, tmp_path])
         content = Path(tmp_path).read_text().strip()
         return content if content else None
     finally:
@@ -110,17 +166,28 @@ def show(
 
 @app.command()
 def edit(
-    entry_id: int = typer.Argument(..., help="Entry ID"),
+    entry_id: int | None = typer.Argument(None, help="Entry ID (picker if omitted)"),
 ) -> None:
     """Edit an existing highlight in $EDITOR."""
-    entry = _get_or_exit(entry_id)
+    if entry_id is None:
+        entries = api.recent(limit=50)
+        if not entries:
+            typer.echo("No highlights yet.")
+            raise typer.Exit(0)
+        lines = [f"[{e.id}] {e.content.split(chr(10))[0][:60]}" for e in entries]
+        idx = _pick(lines)
+        if idx is None:
+            raise typer.Exit(0)
+        entry = entries[idx]
+    else:
+        entry = _get_or_exit(entry_id)
 
     content = _open_editor(entry.content)
     if content is None or content == entry.content:
         typer.echo("No changes.")
         raise typer.Exit(0)
 
-    updated = api.update(entry_id, content=content)
+    updated = api.update(entry.id, content=content)
     if updated:
         typer.echo(f"Updated #{updated.id}")
 
