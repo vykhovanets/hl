@@ -110,11 +110,17 @@ def delete(entry_id: int) -> bool:
 # =============================================================================
 
 
-def format_short(entry: Entry) -> str:
+def format_short(entry: Entry, *, color: bool = True) -> str:
     """One-line summary for list views."""
     source_str = f"  {entry.source}" if entry.source else ""
     author_mark = " (claude)" if entry.author == "claude" else ""
     preview = entry.content.split("\n")[0][:60]
+    if color:
+        import typer
+
+        id_part = typer.style(f"[{entry.id}]", bold=True)
+        meta = typer.style(f"{entry.created_at}{author_mark}{source_str}", dim=True)
+        return f"{id_part} {meta}\n     {preview}"
     return f"[{entry.id}] {entry.created_at}{author_mark}{source_str}\n     {preview}"
 
 

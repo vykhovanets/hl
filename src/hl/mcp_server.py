@@ -107,7 +107,7 @@ async def list_tools() -> list[Tool]:
 def _format_entry_list(header: str, entries: list) -> list[TextContent]:
     lines = [header]
     for e in entries:
-        lines.append(api.format_short(e))
+        lines.append(api.format_short(e, color=False))
     return [TextContent(type="text", text="\n".join(lines))]
 
 

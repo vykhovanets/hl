@@ -92,7 +92,7 @@ def test_show_nonexistent_id():
 def test_edit_saves_changes():
     api.add(content="original text", author="user")
     with patch("hl.cli._open_editor", return_value="updated text"):
-        result = runner.invoke(app, ["edit", "1"])
+        result = runner.invoke(app, ["ed", "1"])
     assert result.exit_code == 0
     assert "Updated #1" in result.output
     assert api.get(1).content == "updated text"
@@ -101,7 +101,7 @@ def test_edit_saves_changes():
 def test_edit_no_changes():
     api.add(content="same text", author="user")
     with patch("hl.cli._open_editor", return_value="same text"):
-        result = runner.invoke(app, ["edit", "1"])
+        result = runner.invoke(app, ["ed", "1"])
     assert result.exit_code == 0
     assert "No changes." in result.output
 
@@ -109,14 +109,14 @@ def test_edit_no_changes():
 def test_edit_empty_means_no_changes():
     api.add(content="keep this", author="user")
     with patch("hl.cli._open_editor", return_value=None):
-        result = runner.invoke(app, ["edit", "1"])
+        result = runner.invoke(app, ["ed", "1"])
     assert result.exit_code == 0
     assert "No changes." in result.output
     assert api.get(1).content == "keep this"
 
 
 def test_edit_nonexistent_id():
-    result = runner.invoke(app, ["edit", "999"])
+    result = runner.invoke(app, ["ed", "999"])
     assert result.exit_code == 1
     assert "No entry with id 999" in result.output
 
@@ -127,14 +127,14 @@ def test_edit_nonexistent_id():
 def test_recent_lists_entries():
     api.add(content="first", author="user")
     api.add(content="second", author="user")
-    result = runner.invoke(app, ["recent"])
+    result = runner.invoke(app, ["ls"])
     assert result.exit_code == 0
     assert "first" in result.output
     assert "second" in result.output
 
 
 def test_recent_empty():
-    result = runner.invoke(app, ["recent"])
+    result = runner.invoke(app, ["ls"])
     assert result.exit_code == 0
     assert "No highlights yet." in result.output
 
@@ -142,7 +142,7 @@ def test_recent_empty():
 def test_recent_author_filter():
     api.add(content="user note", author="user")
     api.add(content="claude note", author="claude")
-    result = runner.invoke(app, ["recent", "-a", "user"])
+    result = runner.invoke(app, ["ls", "-a", "user"])
     assert result.exit_code == 0
     assert "user note" in result.output
     assert "claude note" not in result.output
@@ -151,7 +151,7 @@ def test_recent_author_filter():
 def test_recent_respects_limit():
     for i in range(5):
         api.add(content=f"entry {i}", author="user")
-    result = runner.invoke(app, ["recent", "-n", "2"])
+    result = runner.invoke(app, ["ls", "-n", "2"])
     assert result.exit_code == 0
     output_ids = [line for line in result.output.splitlines() if line.startswith("[")]
     assert len(output_ids) == 2

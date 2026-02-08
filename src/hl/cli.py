@@ -165,7 +165,7 @@ def show(
 
 
 @app.command()
-def edit(
+def ed(
     entry_id: int | None = typer.Argument(None, help="Entry ID (picker if omitted)"),
 ) -> None:
     """Edit an existing highlight in $EDITOR."""
@@ -174,7 +174,14 @@ def edit(
         if not entries:
             typer.echo("No highlights yet.")
             raise typer.Exit(0)
-        lines = [f"[{e.id}] {e.content.split(chr(10))[0][:60]}" for e in entries]
+        lines = [
+            typer.style(f"[{e.id}]", bold=True)
+            + " "
+            + typer.style(e.created_at, dim=True)
+            + " | "
+            + e.content.split(chr(10))[0][:60]
+            for e in entries
+        ]
         idx = _pick(lines)
         if idx is None:
             raise typer.Exit(0)
@@ -193,7 +200,7 @@ def edit(
 
 
 @app.command()
-def recent(
+def ls(
     limit: int = typer.Option(20, "-n", "--limit"),
     author: str = typer.Option(None, "-a", "--author", help="Filter: 'user' or 'claude'"),
 ) -> None:
