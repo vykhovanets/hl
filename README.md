@@ -21,7 +21,6 @@ Also runs as an MCP server — Claude can search and capture highlights during c
 ## Install
 
 ```
-uvx --from git+https://github.com/vykhovanets/hl.git hl --help
 uv tool install git+https://github.com/vykhovanets/hl.git
-hl-mcp install                # register MCP server
+claude mcp add hl -- hl-mcp
 ```

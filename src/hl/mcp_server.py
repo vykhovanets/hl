@@ -1,18 +1,14 @@
 """MCP server exposing hl functionality to Claude Code.
 
 Usage:
-    uv run hl-mcp install   # Register with Claude Code
-    uv run hl-mcp uninstall # Remove registration
-    uv run hl-mcp serve     # Run server (called by Claude Code)
+    claude mcp add hl -- hl-mcp   # Register globally
+    hl-mcp                        # Run server (called by Claude Code)
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
-from pathlib import Path
 
-import typer
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
@@ -154,62 +150,5 @@ async def run_server():
         await server.run(read_stream, write_stream, server.create_initialization_options())
 
 
-# =============================================================================
-# Install/Uninstall CLI
-# =============================================================================
-
-mcp_app = typer.Typer(no_args_is_help=True, add_completion=False)
-
-
-def _mcp_json_path() -> Path:
-    return Path.cwd() / ".mcp.json"
-
-
-def _load_mcp_json() -> dict:
-    path = _mcp_json_path()
-    if path.exists():
-        return json.loads(path.read_text())
-    return {}
-
-
-def _save_mcp_json(config: dict) -> None:
-    path = _mcp_json_path()
-    path.write_text(json.dumps(config, indent=2) + "\n")
-
-
-@mcp_app.command()
-def install() -> None:
-    """Register hl MCP server with Claude Code."""
-    config = _load_mcp_json()
-    config.setdefault("mcpServers", {})
-    config["mcpServers"]["hl"] = {
-        "command": "hl-mcp",
-        "args": ["serve"],
-    }
-    _save_mcp_json(config)
-    typer.echo(f"Registered hl MCP server in {_mcp_json_path()}")
-    typer.echo("  Restart Claude Code to activate.")
-
-
-@mcp_app.command()
-def uninstall() -> None:
-    """Remove hl MCP server registration."""
-    config = _load_mcp_json()
-    if "mcpServers" in config and "hl" in config["mcpServers"]:
-        del config["mcpServers"]["hl"]
-        if not config["mcpServers"]:
-            del config["mcpServers"]
-        _save_mcp_json(config)
-        typer.echo("Removed hl MCP server registration.")
-    else:
-        typer.echo("hl MCP server not registered.")
-
-
-@mcp_app.command()
-def serve() -> None:
-    """Run MCP server (called by Claude Code)."""
-    asyncio.run(run_server())
-
-
 def main() -> None:
-    mcp_app()
+    asyncio.run(run_server())
