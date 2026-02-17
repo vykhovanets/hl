@@ -41,9 +41,27 @@ GUI_EDITORS_WAIT_FLAG = {
 }
 
 
+def _load_config() -> dict[str, str]:
+    """Load key=value pairs from ~/.config/hl/hl.conf (respects XDG_CONFIG_HOME)."""
+    base = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+    conf = base / "hl" / "hl.conf"
+    if not conf.is_file():
+        return {}
+    result: dict[str, str] = {}
+    for line in conf.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.strip(), value.strip()
+        if key and value:
+            result[key] = value
+    return result
+
+
 def _editor_cmd() -> list[str]:
     """Build editor command, adding --wait for GUI editors."""
-    editor = os.environ.get("EDITOR", os.environ.get("VISUAL", "nano"))
+    editor = _load_config().get("editor") or os.environ.get("EDITOR", os.environ.get("VISUAL", "nano"))
     parts = shlex.split(editor)
     basename = Path(parts[0]).stem
     wait_flag = GUI_EDITORS_WAIT_FLAG.get(basename)
