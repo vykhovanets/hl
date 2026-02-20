@@ -115,6 +115,23 @@ def test_edit_empty_means_no_changes():
     assert api.get(1).content == "keep this"
 
 
+def test_edit_persists_on_intermediate_save():
+    """ed writes to DB when on_save fires (before editor closes)."""
+    api.add(content="original", author="user")
+
+    def fake_editor(initial="", on_save=None):
+        assert on_save is not None
+        on_save("intermediate save")
+        assert api.get(1).content == "intermediate save"
+        return "final content"
+
+    with patch("hl.cli._open_editor", side_effect=fake_editor):
+        result = runner.invoke(app, ["ed", "1"])
+
+    assert result.exit_code == 0
+    assert api.get(1).content == "final content"
+
+
 def test_edit_nonexistent_id():
     result = runner.invoke(app, ["ed", "999"])
     assert result.exit_code == 1

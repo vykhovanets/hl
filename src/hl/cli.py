@@ -8,7 +8,9 @@ import subprocess
 import sys
 import tempfile
 import termios
+import time
 import tty
+from collections.abc import Callable
 from pathlib import Path
 
 import typer
@@ -123,15 +125,43 @@ def _pick(items: list[str], visible: int = 5) -> int | None:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
 
-def _open_editor(initial: str = "") -> str | None:
-    """Open $EDITOR, return content or None if empty."""
+def _open_editor(
+    initial: str = "",
+    on_save: Callable[[str], None] | None = None,
+) -> str | None:
+    """Open $EDITOR, return content or None if empty.
+
+    If *on_save* is provided, the temp file is polled every second while the
+    editor is still running.  Whenever the file's mtime changes and the content
+    differs from the last known version, *on_save(new_content)* is called so
+    the caller can persist intermediate saves (e.g. to the database).
+    """
     cmd = _editor_cmd()
     with tempfile.NamedTemporaryFile(suffix=".md", mode="w", delete=False) as f:
         f.write(initial)
         tmp_path = f.name
 
     try:
-        subprocess.run([*cmd, tmp_path])
+        proc = subprocess.Popen([*cmd, tmp_path])
+
+        if on_save:
+            last_mtime = os.path.getmtime(tmp_path)
+            last_content = initial
+            while proc.poll() is None:
+                time.sleep(1)
+                try:
+                    mtime = os.path.getmtime(tmp_path)
+                    if mtime != last_mtime:
+                        last_mtime = mtime
+                        content = Path(tmp_path).read_text().strip()
+                        if content and content != last_content:
+                            on_save(content)
+                            last_content = content
+                except OSError:
+                    pass
+        else:
+            proc.wait()
+
         content = Path(tmp_path).read_text().strip()
         return content if content else None
     finally:
@@ -207,7 +237,10 @@ def ed(
     else:
         entry = _get_or_exit(entry_id)
 
-    content = _open_editor(entry.content)
+    def _persist(text: str) -> None:
+        api.update(entry.id, content=text)
+
+    content = _open_editor(entry.content, on_save=_persist)
     if content is None or content == entry.content:
         typer.echo("No changes.")
         raise typer.Exit(0)
