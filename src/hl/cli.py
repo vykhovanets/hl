@@ -16,6 +16,7 @@ from pathlib import Path
 import typer
 
 from . import api
+from . import lock
 
 app = typer.Typer(no_args_is_help=True, add_completion=False)
 
@@ -237,17 +238,26 @@ def ed(
     else:
         entry = _get_or_exit(entry_id)
 
-    def _persist(text: str) -> None:
-        api.update(entry.id, content=text)
+    try:
+        lock.acquire(entry.id)
+    except lock.EditorLockError as exc:
+        typer.echo(str(exc))
+        raise typer.Exit(1)
 
-    content = _open_editor(entry.content, on_save=_persist)
-    if content is None or content == entry.content:
-        typer.echo("No changes.")
-        raise typer.Exit(0)
+    try:
+        def _persist(text: str) -> None:
+            api.update(entry.id, content=text)
 
-    updated = api.update(entry.id, content=content)
-    if updated:
-        typer.echo(f"Updated #{updated.id}")
+        content = _open_editor(entry.content, on_save=_persist)
+        if content is None or content == entry.content:
+            typer.echo("No changes.")
+            raise typer.Exit(0)
+
+        updated = api.update(entry.id, content=content)
+        if updated:
+            typer.echo(f"Updated #{updated.id}")
+    finally:
+        lock.release(entry.id)
 
 
 @app.command()
